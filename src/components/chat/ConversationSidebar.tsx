@@ -1,10 +1,11 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Message, Conversation } from '@/types/chat';
 import { cn, deserializeMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { TypingIndicator, EmptyState, ConversationSkeleton } from '@/components/ui/LoadingStates';
+import { EmptyState, ConversationSkeleton } from '@/components/ui/LoadingStates';
 
 interface ConversationSidebarProps {
   onConversationSelect: (conversationId: string, messages: Message[], memoryInfo: {

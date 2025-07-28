@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { openai, OPENAI_MODEL, countTokens, calculateCost } from '@/lib/openai';
-import { generateId } from '@/lib/utils';
+import { OPENAI_MODEL, countTokens, calculateCost } from '@/lib/openai';
 import { ChatRequest, ChatResponse, Message } from '@/types/chat';
 import { 
   saveMessage, 
