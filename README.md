@@ -94,16 +94,46 @@ src/
     └── chat.ts                        # TypeScript interfaces
 ```
 
+## Deployment
+
+### Vercel Deployment
+
+1. **Fork/Clone** this repository to your GitHub account
+2. **Connect to Vercel**:
+   - Go to [Vercel](https://vercel.com)
+   - Import your GitHub repository
+   - Vercel will automatically detect it's a Next.js project
+
+3. **Configure Environment Variables**:
+   - In your Vercel project dashboard, go to Settings > Environment Variables
+   - Add all the environment variables from your `.env.local` file:
+     - `FIREBASE_PROJECT_ID`
+     - `FIREBASE_PRIVATE_KEY`
+     - `FIREBASE_CLIENT_EMAIL`
+     - `OPENAI_API_KEY`
+     - `OPENAI_MODEL`
+     - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+
+4. **Deploy**: Vercel will automatically deploy your app
+
+### Environment Variables Reference
+
+Copy the `env.template` file to `.env.local` and fill in your values:
+
+```bash
+cp env.template .env.local
+```
+
 ## Current Implementation Status
 
 ✅ **Step 1: Basic Setup** - Firebase + OpenAI configuration
 ✅ **Step 2: Simple Chat** - Basic chat without memory
 ✅ **Step 3: Database Integration** - Store conversations in Firebase
+✅ **Step 4: LangChain Integration** - Add memory management
+✅ **Step 5: Advanced Memory Features** - Conversation summaries and context injection
 
 ## Next Steps
 
-- [ ] **Step 4: LangChain Integration** - Add memory management
-- [ ] **Step 5: Advanced Memory Features** - Conversation summaries and context injection
 - [ ] **Step 6: User Authentication** - Proper user management
 - [ ] **Step 7: UI Enhancements** - Better styling and UX
 

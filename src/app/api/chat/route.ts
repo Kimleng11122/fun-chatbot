@@ -13,6 +13,14 @@ import { llm } from '@/lib/langchain';
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if LLM is available
+    if (!llm) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 500 }
+      );
+    }
+
     const body: ChatRequest = await request.json();
     const { message, userId, conversationId } = body;
 

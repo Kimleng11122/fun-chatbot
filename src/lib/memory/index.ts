@@ -20,6 +20,10 @@ export class MemoryService {
     messages: Array<{ role: string; content: string }>
   ): Promise<ConversationMemory> {
     try {
+      if (!llm) {
+        throw new Error('OpenAI API key not configured');
+      }
+
       // Create summary prompt
       const summaryPrompt = `
         Summarize the following conversation in 2-3 sentences. 

@@ -140,7 +140,7 @@ export async function saveConversationWithMessages(
   
   // Create messages
   const messagesToSave: Message[] = [];
-  messages.forEach((message, index) => {
+  messages.forEach((message, _index) => {
     const messageRef = db.collection('messages').doc();
     const newMessage: Message = {
       ...message,

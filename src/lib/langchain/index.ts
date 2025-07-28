@@ -4,12 +4,14 @@ import { ConversationSummaryMemory } from 'langchain/memory';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { OPENAI_MODEL } from '../openai';
 
-// Initialize OpenAI LLM
-export const llm = new ChatOpenAI({
-  modelName: OPENAI_MODEL,
-  temperature: 0.7,
-  maxTokens: 1000,
-});
+// Initialize OpenAI LLM only if API key is available
+export const llm = process.env.OPENAI_API_KEY 
+  ? new ChatOpenAI({
+      modelName: OPENAI_MODEL,
+      temperature: 0.7,
+      maxTokens: 1000,
+    })
+  : null;
 
 // Custom prompt template for better conversation flow
 const conversationPrompt = PromptTemplate.fromTemplate(`
@@ -23,6 +25,10 @@ AI Assistant:`);
 
 // Create conversation chain with summary memory
 export function createConversationChain() {
+  if (!llm) {
+    throw new Error('OpenAI API key not configured');
+  }
+  
   const memory = new ConversationSummaryMemory({
     llm,
     memoryKey: 'history',
