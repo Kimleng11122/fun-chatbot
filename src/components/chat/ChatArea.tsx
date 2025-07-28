@@ -6,7 +6,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { MemoryIndicator, MemoryDetails } from './MemoryIndicator';
 import { UsageIndicator } from '@/components/chat/UsageIndicator';
-import { generateId } from '@/lib/utils';
+import { generateId, deserializeMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { TypingIndicator, EmptyState } from '@/components/ui/LoadingStates';
 
@@ -99,8 +99,11 @@ export function ChatArea({
 
       const data = await response.json();
       
+      // Deserialize the AI message to ensure proper timestamp conversion
+      const deserializedMessage = deserializeMessage(data.message) as unknown as Message;
+      
       // Add AI response to chat
-      const finalMessages = [...updatedMessages, data.message];
+      const finalMessages = [...updatedMessages, deserializedMessage];
       
       // Update parent with new messages
       if (data.conversationId) {

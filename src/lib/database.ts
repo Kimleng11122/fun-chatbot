@@ -76,8 +76,15 @@ export async function getUserConversations(userId: string): Promise<Conversation
 // Messages collection
 export async function saveMessage(message: Omit<Message, 'id'>): Promise<Message> {
   const messageRef = db.collection('messages').doc();
-  const newMessage: Message = {
+  
+  // Ensure timestamp is properly set
+  const messageWithTimestamp = {
     ...message,
+    timestamp: message.timestamp || new Date(),
+  };
+  
+  const newMessage: Message = {
+    ...messageWithTimestamp,
     id: messageRef.id,
   };
   
@@ -94,9 +101,25 @@ export async function getConversationMessages(conversationId: string): Promise<M
   
   return snapshot.docs.map(doc => {
     const data = doc.data();
+    // Ensure proper timestamp conversion from Firestore
+    let timestamp: Date;
+    if (data.timestamp?.toDate) {
+      // Firestore Timestamp object
+      timestamp = data.timestamp.toDate();
+    } else if (data.timestamp instanceof Date) {
+      // Already a Date object
+      timestamp = data.timestamp;
+    } else if (typeof data.timestamp === 'string') {
+      // String timestamp
+      timestamp = new Date(data.timestamp);
+    } else {
+      // Fallback to current date if invalid
+      timestamp = new Date();
+    }
+    
     return {
       ...data,
-      timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp,
+      timestamp,
     } as Message;
   });
 }

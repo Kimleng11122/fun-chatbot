@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -51,10 +51,15 @@ export function ChatInput({ onSendMessage, disabled = false }: ChatInputProps) {
           'p-3 bg-blue-500 text-white rounded-lg',
           'hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-          'transition-colors duration-200'
+          'transition-colors duration-200',
+          'flex items-center justify-center'
         )}
       >
-        <Send size={20} />
+        {disabled ? (
+          <Loader2 size={20} className="animate-spin" />
+        ) : (
+          <Send size={20} />
+        )}
       </button>
     </form>
   );

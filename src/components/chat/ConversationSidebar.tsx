@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Message, Conversation } from '@/types/chat';
-import { cn } from '@/lib/utils';
+import { cn, deserializeMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { TypingIndicator, EmptyState, ConversationSkeleton } from '@/components/ui/LoadingStates';
 
@@ -77,7 +77,10 @@ export function ConversationSidebar({ onConversationSelect, onLoadingStateChange
         memoryResponse.json()
       ]);
 
-      const messages: Message[] = messagesData.messages;
+      // Deserialize messages to ensure proper timestamp conversion
+      const messages: Message[] = messagesData.messages.map((msg: Record<string, unknown>) => 
+        deserializeMessage(msg) as unknown as Message
+      );
       const memoryInfo = {
         memories: memoryData.memories,
         summary: memoryData.summary,
