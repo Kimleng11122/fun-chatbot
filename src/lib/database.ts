@@ -1,9 +1,17 @@
 import { db } from './firebase';
 import { Message, Conversation, User, UsageRecord, UsageStats } from '@/types/chat';
 
+// Helper function to check if database is available
+function checkDatabase() {
+  if (!db) {
+    throw new Error('Firebase not configured. Please check your environment variables.');
+  }
+}
+
 // Users collection
 export async function createUser(user: Omit<User, 'id'>): Promise<User> {
-  const userRef = db.collection('users').doc();
+  checkDatabase();
+  const userRef = db!.collection('users').doc();
   const newUser: User = {
     ...user,
     id: userRef.id,
@@ -14,7 +22,8 @@ export async function createUser(user: Omit<User, 'id'>): Promise<User> {
 }
 
 export async function getUser(userId: string): Promise<User | null> {
-  const userDoc = await db.collection('users').doc(userId).get();
+  checkDatabase();
+  const userDoc = await db!.collection('users').doc(userId).get();
   if (!userDoc.exists) return null;
   
   const data = userDoc.data();
@@ -29,7 +38,8 @@ export async function getUser(userId: string): Promise<User | null> {
 
 // Conversations collection
 export async function createConversation(conversation: Omit<Conversation, 'id'>): Promise<Conversation> {
-  const conversationRef = db.collection('conversations').doc();
+  checkDatabase();
+  const conversationRef = db!.collection('conversations').doc();
   const newConversation: Conversation = {
     ...conversation,
     id: conversationRef.id,
@@ -40,24 +50,27 @@ export async function createConversation(conversation: Omit<Conversation, 'id'>)
 }
 
 export async function getConversation(conversationId: string): Promise<Conversation | null> {
-  const conversationDoc = await db.collection('conversations').doc(conversationId).get();
+  checkDatabase();
+  const conversationDoc = await db!.collection('conversations').doc(conversationId).get();
   return conversationDoc.exists ? (conversationDoc.data() as Conversation) : null;
 }
 
 export async function updateConversation(conversationId: string, updates: Partial<Conversation>): Promise<void> {
+  checkDatabase();
   // Filter out undefined values to avoid Firestore errors
   const filteredUpdates = Object.fromEntries(
     Object.entries(updates).filter(([_, value]) => value !== undefined)
   );
   
-  await db.collection('conversations').doc(conversationId).update({
+  await db!.collection('conversations').doc(conversationId).update({
     ...filteredUpdates,
     updatedAt: new Date(),
   });
 }
 
 export async function getUserConversations(userId: string): Promise<Conversation[]> {
-  const snapshot = await db
+  checkDatabase();
+  const snapshot = await db!
     .collection('conversations')
     .where('userId', '==', userId)
     .orderBy('updatedAt', 'desc')
@@ -75,7 +88,8 @@ export async function getUserConversations(userId: string): Promise<Conversation
 
 // Messages collection
 export async function saveMessage(message: Omit<Message, 'id'>): Promise<Message> {
-  const messageRef = db.collection('messages').doc();
+  checkDatabase();
+  const messageRef = db!.collection('messages').doc();
   
   // Ensure timestamp is properly set
   const messageWithTimestamp = {
@@ -93,7 +107,8 @@ export async function saveMessage(message: Omit<Message, 'id'>): Promise<Message
 }
 
 export async function getConversationMessages(conversationId: string): Promise<Message[]> {
-  const snapshot = await db
+  checkDatabase();
+  const snapshot = await db!
     .collection('messages')
     .where('conversationId', '==', conversationId)
     .orderBy('timestamp', 'asc')
@@ -128,10 +143,11 @@ export async function saveConversationWithMessages(
   conversation: Omit<Conversation, 'id'>,
   messages: Omit<Message, 'id' | 'conversationId'>[]
 ): Promise<{ conversation: Conversation; messages: Message[] }> {
-  const batch = db.batch();
+  checkDatabase();
+  const batch = db!.batch();
   
   // Create conversation
-  const conversationRef = db.collection('conversations').doc();
+  const conversationRef = db!.collection('conversations').doc();
   const newConversation: Conversation = {
     ...conversation,
     id: conversationRef.id,
@@ -141,7 +157,7 @@ export async function saveConversationWithMessages(
   // Create messages
   const messagesToSave: Message[] = [];
   messages.forEach((message, _index) => {
-    const messageRef = db.collection('messages').doc();
+    const messageRef = db!.collection('messages').doc();
     const newMessage: Message = {
       ...message,
       id: messageRef.id,
@@ -157,7 +173,8 @@ export async function saveConversationWithMessages(
 
 // Usage tracking functions
 export async function saveUsageRecord(usage: Omit<UsageRecord, 'id'>): Promise<UsageRecord> {
-  const usageRef = db.collection('usage').doc();
+  checkDatabase();
+  const usageRef = db!.collection('usage').doc();
   const newUsage: UsageRecord = {
     ...usage,
     id: usageRef.id,
@@ -168,7 +185,8 @@ export async function saveUsageRecord(usage: Omit<UsageRecord, 'id'>): Promise<U
 }
 
 export async function getUserUsageRecords(userId: string, limit: number = 100): Promise<UsageRecord[]> {
-  const snapshot = await db
+  checkDatabase();
+  const snapshot = await db!
     .collection('usage')
     .where('userId', '==', userId)
     .orderBy('timestamp', 'desc')
@@ -185,10 +203,11 @@ export async function getUserUsageRecords(userId: string, limit: number = 100): 
 }
 
 export async function getUserUsageStats(userId: string, days: number = 30): Promise<UsageStats> {
+  checkDatabase();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   
-  const snapshot = await db
+  const snapshot = await db!
     .collection('usage')
     .where('userId', '==', userId)
     .where('timestamp', '>=', startDate)

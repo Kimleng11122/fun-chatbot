@@ -1,10 +1,10 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK only if environment variables are available
 const apps = getApps();
 
-if (!apps.length) {
+if (!apps.length && process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
   initializeApp({
     credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -14,7 +14,8 @@ if (!apps.length) {
   });
 }
 
-export const db = getFirestore();
+// Export db only if Firebase is initialized
+export const db = apps.length > 0 ? getFirestore() : null;
 
 // Client-side Firebase config (for future use)
 export const firebaseConfig = {

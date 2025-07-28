@@ -13,6 +13,13 @@ export class MemoryService {
     return MemoryService.instance;
   }
 
+  // Helper function to check if database is available
+  private checkDatabase() {
+    if (!db) {
+      throw new Error('Firebase not configured. Please check your environment variables.');
+    }
+  }
+
   // Create conversation summary
   async createConversationSummary(
     userId: string,
@@ -23,6 +30,8 @@ export class MemoryService {
       if (!llm) {
         throw new Error('OpenAI API key not configured');
       }
+
+      this.checkDatabase();
 
       // Create summary prompt
       const summaryPrompt = `
@@ -65,7 +74,7 @@ export class MemoryService {
       };
 
       // Save to Firestore
-      await db.collection('conversation_memories').doc(memory.id).set(memory);
+      await db!.collection('conversation_memories').doc(memory.id).set(memory);
 
       return memory;
     } catch (error) {
@@ -81,8 +90,9 @@ export class MemoryService {
     limit: number = 3
   ): Promise<ConversationMemory[]> {
     try {
+      this.checkDatabase();
       // Get all user memories
-      const memoriesSnapshot = await db
+      const memoriesSnapshot = await db!
         .collection('conversation_memories')
         .where('userId', '==', userId)
         .orderBy('lastAccessed', 'desc')
@@ -106,7 +116,7 @@ export class MemoryService {
 
       // Update last accessed for retrieved memories
       for (const memory of relevantMemories) {
-        await db
+        await db!
           .collection('conversation_memories')
           .doc(memory.id)
           .update({ lastAccessed: new Date() });
