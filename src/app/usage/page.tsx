@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { UsageResponse, UsageRecord } from '@/types/chat';
+import { UsageResponse } from '@/types/chat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { 
   BarChart, 
   Bar, 
@@ -21,6 +22,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
+
 
 export default function UsagePage() {
   const { user } = useAuth();
