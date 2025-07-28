@@ -1,10 +1,10 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin SDK only if environment variables are available
-const apps = getApps();
+let db: Firestore | null = null;
 
-if (!apps.length) {
+if (!getApps().length) {
   // Check if all required environment variables are present
   const requiredVars = {
     FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
@@ -32,15 +32,23 @@ if (!apps.length) {
         }),
       });
       console.log('Firebase Admin SDK initialized successfully');
+      
+      // Initialize Firestore after app initialization
+      db = getFirestore();
+      console.log('Firestore database initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Firebase Admin SDK:', error);
       console.error('Please check your Firebase service account credentials');
     }
   }
+} else {
+  // If apps already exist, get the Firestore instance
+  db = getFirestore();
+  console.log('Using existing Firebase app, Firestore initialized');
 }
 
-// Export db only if Firebase is initialized
-export const db = apps.length > 0 ? getFirestore() : null;
+// Export db
+export { db };
 
 // Add a helper function to check if Firebase is properly configured
 export function isFirebaseConfigured(): boolean {
