@@ -6,7 +6,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { generateId } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { getUserId } from '@/lib/userSession';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -16,8 +16,9 @@ export function ChatContainer() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Get user ID from session management
-  const userId = getUserId();
+  // Get authenticated user
+  const { user, logout } = useAuth();
+  const userId = user?.uid || '';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -175,13 +176,26 @@ export function ChatContainer() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="bg-white border-b px-6 py-4">
+              {/* Header */}
+      <div className="bg-white border-b px-6 py-4 flex justify-between items-center">
+        <div>
           <h1 className="text-xl font-semibold text-gray-800">AI Chat Assistant</h1>
           <p className="text-sm text-gray-600">
             {conversationId ? 'Continuing conversation...' : 'Start a new conversation!'}
           </p>
         </div>
+        <div className="flex items-center space-x-4">
+          <span className="text-sm text-gray-600">
+            Welcome, {user?.displayName || user?.email || 'User'}
+          </span>
+          <button
+            onClick={logout}
+            className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4">

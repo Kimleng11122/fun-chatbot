@@ -6,9 +6,7 @@ import {
   saveMessage, 
   createConversation, 
   updateConversation, 
-  getConversationMessages,
-  getUser,
-  createUser
+  getConversationMessages
 } from '@/lib/database';
 
 export async function POST(request: NextRequest) {
@@ -23,15 +21,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ensure user exists (create if not)
-    let user = await getUser(userId);
-    if (!user) {
-      user = await createUser({
-        name: `User ${userId.slice(-6)}`,
-        createdAt: new Date(),
-        lastActive: new Date(),
-      });
-    }
+    // For now, we'll use the userId directly
+    // In a production app, you'd verify the user exists in your database
 
     let currentConversationId = conversationId;
     let isNewConversation = false;
