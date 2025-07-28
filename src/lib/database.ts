@@ -1,10 +1,15 @@
-import { db } from './firebase';
+import { db, isFirebaseConfigured } from './firebase';
 import { Message, Conversation, User, UsageRecord, UsageStats } from '@/types/chat';
 
 // Helper function to check if database is available
 function checkDatabase() {
-  if (!db) {
+  if (!isFirebaseConfigured()) {
+    console.error('Firebase is not configured. Environment variables may be missing or incorrect.');
+    console.error('Required variables: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY');
     throw new Error('Firebase not configured. Please check your environment variables.');
+  }
+  if (!db) {
+    throw new Error('Firebase database connection failed.');
   }
 }
 
