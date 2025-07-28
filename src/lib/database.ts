@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { Message, Conversation, User } from '@/types/chat';
+import { Message, Conversation, User, UsageRecord, UsageStats } from '@/types/chat';
 
 // Users collection
 export async function createUser(user: Omit<User, 'id'>): Promise<User> {
@@ -130,4 +130,90 @@ export async function saveConversationWithMessages(
   
   await batch.commit();
   return { conversation: newConversation, messages: messagesToSave };
+}
+
+// Usage tracking functions
+export async function saveUsageRecord(usage: Omit<UsageRecord, 'id'>): Promise<UsageRecord> {
+  const usageRef = db.collection('usage').doc();
+  const newUsage: UsageRecord = {
+    ...usage,
+    id: usageRef.id,
+  };
+  
+  await usageRef.set(newUsage);
+  return newUsage;
+}
+
+export async function getUserUsageRecords(userId: string, limit: number = 100): Promise<UsageRecord[]> {
+  const snapshot = await db
+    .collection('usage')
+    .where('userId', '==', userId)
+    .orderBy('timestamp', 'desc')
+    .limit(limit)
+    .get();
+  
+  return snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      ...data,
+      timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp,
+    } as UsageRecord;
+  });
+}
+
+export async function getUserUsageStats(userId: string, days: number = 30): Promise<UsageStats> {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  
+  const snapshot = await db
+    .collection('usage')
+    .where('userId', '==', userId)
+    .where('timestamp', '>=', startDate)
+    .get();
+  
+  const records = snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      ...data,
+      timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp,
+    } as UsageRecord;
+  });
+  
+  // Calculate stats
+  const totalTokens = records.reduce((sum, record) => sum + record.totalTokens, 0);
+  const totalCost = records.reduce((sum, record) => sum + record.cost, 0);
+  const totalMessages = records.length;
+  const averageTokensPerMessage = totalMessages > 0 ? totalTokens / totalMessages : 0;
+  
+  // Group by model
+  const usageByModel: Record<string, { tokens: number; cost: number; messages: number }> = {};
+  records.forEach(record => {
+    if (!usageByModel[record.model]) {
+      usageByModel[record.model] = { tokens: 0, cost: 0, messages: 0 };
+    }
+    usageByModel[record.model].tokens += record.totalTokens;
+    usageByModel[record.model].cost += record.cost;
+    usageByModel[record.model].messages += 1;
+  });
+  
+  // Group by date
+  const usageByDate: Record<string, { tokens: number; cost: number; messages: number }> = {};
+  records.forEach(record => {
+    const dateKey = record.timestamp.toISOString().split('T')[0];
+    if (!usageByDate[dateKey]) {
+      usageByDate[dateKey] = { tokens: 0, cost: 0, messages: 0 };
+    }
+    usageByDate[dateKey].tokens += record.totalTokens;
+    usageByDate[dateKey].cost += record.cost;
+    usageByDate[dateKey].messages += 1;
+  });
+  
+  return {
+    totalTokens,
+    totalCost,
+    totalMessages,
+    averageTokensPerMessage,
+    usageByModel,
+    usageByDate,
+  };
 } 

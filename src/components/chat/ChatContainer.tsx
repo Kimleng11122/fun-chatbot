@@ -5,6 +5,7 @@ import { Message, Conversation } from '@/types/chat';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { MemoryIndicator, MemoryDetails } from './MemoryIndicator';
+import { UsageIndicator } from './UsageIndicator';
 import { generateId } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -220,9 +221,16 @@ export function ChatContainer() {
           </p>
         </div>
         <div className="flex items-center space-x-4">
+          <UsageIndicator />
           <span className="text-sm text-gray-600">
             Welcome, {user?.displayName || user?.email || 'User'}
           </span>
+          <a
+            href="/usage"
+            className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+          >
+            Usage
+          </a>
           <button
             onClick={logout}
             className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded"

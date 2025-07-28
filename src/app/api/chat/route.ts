@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { openai, OPENAI_MODEL } from '@/lib/openai';
+import { openai, OPENAI_MODEL, countTokens, calculateCost } from '@/lib/openai';
 import { generateId } from '@/lib/utils';
 import { ChatRequest, ChatResponse, Message } from '@/types/chat';
 import { 
   saveMessage, 
   createConversation, 
   updateConversation, 
-  getConversationMessages
+  getConversationMessages,
+  saveUsageRecord
 } from '@/lib/database';
 import { memoryService } from '@/lib/memory';
 import { llm } from '@/lib/langchain';
@@ -78,6 +79,25 @@ AI Assistant:`;
     // Get AI response using LangChain
     const aiResponse = await llm.invoke(enhancedPrompt);
     const aiContent = aiResponse.content as string;
+
+    // Calculate token usage
+    const promptTokens = countTokens(enhancedPrompt);
+    const completionTokens = countTokens(aiContent);
+    const totalTokens = promptTokens + completionTokens;
+    const cost = calculateCost(promptTokens, completionTokens, OPENAI_MODEL);
+
+    // Save usage record
+    await saveUsageRecord({
+      userId,
+      conversationId: currentConversationId,
+      messageId: savedUserMessage.id,
+      model: OPENAI_MODEL,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      cost,
+      timestamp: new Date(),
+    });
 
     // Create AI message
     const aiMessage: Omit<Message, 'id'> = {
