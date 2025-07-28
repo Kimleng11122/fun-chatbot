@@ -45,8 +45,13 @@ export async function getConversation(conversationId: string): Promise<Conversat
 }
 
 export async function updateConversation(conversationId: string, updates: Partial<Conversation>): Promise<void> {
+  // Filter out undefined values to avoid Firestore errors
+  const filteredUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([_, value]) => value !== undefined)
+  );
+  
   await db.collection('conversations').doc(conversationId).update({
-    ...updates,
+    ...filteredUpdates,
     updatedAt: new Date(),
   });
 }

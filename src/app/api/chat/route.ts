@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { openai, OPENAI_MODEL } from '@/lib/openai';
 import { generateId } from '@/lib/utils';
-import { ChatRequest, ChatResponse, Message, Conversation } from '@/types/chat';
+import { ChatRequest, ChatResponse, Message } from '@/types/chat';
 import { 
   saveMessage, 
   createConversation, 
   updateConversation, 
   getConversationMessages
 } from '@/lib/database';
+import { memoryService } from '@/lib/memory';
+import { llm } from '@/lib/langchain';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,9 +22,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // For now, we'll use the userId directly
-    // In a production app, you'd verify the user exists in your database
 
     let currentConversationId = conversationId;
     let isNewConversation = false;
@@ -55,32 +54,35 @@ export async function POST(request: NextRequest) {
     // Get conversation history for context
     const conversationMessages = await getConversationMessages(currentConversationId);
     
-    // Prepare messages for OpenAI (include conversation history)
-    const openaiMessages = [
-      {
-        role: 'system' as const,
-        content: 'You are a helpful AI assistant. Be concise and friendly in your responses.',
-      },
-      ...conversationMessages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-      })),
-    ];
+    // Build memory context
+    const memoryContext = await memoryService.buildMemoryContext(
+      userId,
+      message,
+      conversationMessages.map(msg => ({ role: msg.role, content: msg.content }))
+    );
 
-    // Get AI response
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      messages: openaiMessages,
-      max_tokens: 500,
-      temperature: 0.7,
-    });
+    // Create enhanced prompt with memory context
+    const enhancedPrompt = `
+You are a helpful AI assistant with access to conversation history and memory. 
+Your goal is to provide helpful, accurate, and contextually relevant responses.
 
-    const aiResponse = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
+${memoryContext.userContext ? `Previous relevant conversations:\n${memoryContext.userContext}\n` : ''}
+${memoryContext.conversationSummary ? `Current conversation summary:\n${memoryContext.conversationSummary}\n` : ''}
+
+Recent conversation:
+${memoryContext.recentMessages.slice(-6).join('\n')}
+
+Human: ${message}
+AI Assistant:`;
+
+    // Get AI response using LangChain
+    const aiResponse = await llm.invoke(enhancedPrompt);
+    const aiContent = aiResponse.content as string;
 
     // Create AI message
     const aiMessage: Omit<Message, 'id'> = {
       role: 'assistant',
-      content: aiResponse,
+      content: aiContent,
       timestamp: new Date(),
       conversationId: currentConversationId,
       userId,
@@ -90,16 +92,23 @@ export async function POST(request: NextRequest) {
     const savedAiMessage = await saveMessage(aiMessage);
 
     // Update conversation metadata
-    const updateData: Partial<Conversation> = {
+    await updateConversation(currentConversationId, {
       messageCount: conversationMessages.length + 2, // +2 for user and AI messages
-    };
-    
-    // Only update title for new conversations
-    if (isNewConversation) {
-      updateData.title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
+      title: isNewConversation ? message.slice(0, 50) + (message.length > 50 ? '...' : '') : undefined,
+    });
+
+    // Create conversation summary if we have enough messages
+    if (conversationMessages.length >= 8) {
+      try {
+        await memoryService.createConversationSummary(
+          userId,
+          currentConversationId,
+          conversationMessages.map(msg => ({ role: msg.role, content: msg.content }))
+        );
+      } catch (error) {
+        console.error('Error creating conversation summary:', error);
+      }
     }
-    
-    await updateConversation(currentConversationId, updateData);
 
     const response: ChatResponse = {
       message: savedAiMessage,
