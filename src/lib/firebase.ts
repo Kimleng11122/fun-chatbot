@@ -21,8 +21,26 @@ if (!getApps().length) {
     console.error('Please check your Vercel environment variables configuration');
   } else {
     try {
-      // Properly format the private key by replacing escaped newlines
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n');
+      // Handle private key formatting more robustly
+      let privateKey = process.env.FIREBASE_PRIVATE_KEY!;
+      
+      // Remove surrounding quotes if present
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+      }
+      
+      // Replace escaped newlines with actual newlines
+      privateKey = privateKey.replace(/\\n/g, '\n');
+      
+      // Ensure the key starts and ends correctly
+      if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        throw new Error('Invalid private key format: missing BEGIN marker');
+      }
+      if (!privateKey.includes('-----END PRIVATE KEY-----')) {
+        throw new Error('Invalid private key format: missing END marker');
+      }
+      
+      console.log('Private key format validated successfully');
       
       initializeApp({
         credential: cert({
@@ -39,6 +57,7 @@ if (!getApps().length) {
     } catch (error) {
       console.error('Failed to initialize Firebase Admin SDK:', error);
       console.error('Please check your Firebase service account credentials');
+      console.error('Private key format should be: "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"');
     }
   }
 } else {
