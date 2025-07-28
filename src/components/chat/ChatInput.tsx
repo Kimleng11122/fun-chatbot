@@ -38,7 +38,8 @@ export function ChatInput({ onSendMessage, disabled = false }: ChatInputProps) {
             'w-full p-3 border border-gray-300 rounded-lg resize-none',
             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
-            'min-h-[44px] max-h-32'
+            'min-h-[44px] max-h-32',
+            'text-black'
           )}
           rows={1}
         />
