@@ -7,7 +7,8 @@ export const openai = process.env.OPENAI_API_KEY
     })
   : null;
 
-export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+// Updated to use current model name - gpt-3.5-turbo is deprecated
+export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo-0125';
 
 // OpenAI pricing (as of 2024 - update these as needed)
 export const OPENAI_PRICING: Record<string, { input: number; output: number }> = {
@@ -15,6 +16,7 @@ export const OPENAI_PRICING: Record<string, { input: number; output: number }> =
   'gpt-4-turbo': { input: 0.01, output: 0.03 },
   'gpt-4-turbo-preview': { input: 0.01, output: 0.03 },
   'gpt-3.5-turbo': { input: 0.0015, output: 0.002 },
+  'gpt-3.5-turbo-0125': { input: 0.0015, output: 0.002 },
   'gpt-3.5-turbo-16k': { input: 0.003, output: 0.004 },
 };
 

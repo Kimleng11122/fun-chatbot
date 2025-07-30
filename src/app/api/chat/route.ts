@@ -62,12 +62,24 @@ export async function POST(request: NextRequest) {
     // Get conversation history for context
     const conversationMessages = await getConversationMessages(currentConversationId);
     
-    // Build memory context
-    const memoryContext = await memoryService.buildMemoryContext(
-      userId,
-      message,
-      conversationMessages.map(msg => ({ role: msg.role, content: msg.content }))
-    );
+    // Build memory context with error handling
+    let memoryContext;
+    try {
+      memoryContext = await memoryService.buildMemoryContext(
+        userId,
+        message,
+        conversationMessages.map(msg => ({ role: msg.role, content: msg.content }))
+      );
+    } catch (error) {
+      console.error('Error building memory context:', error);
+      // Fallback to basic context if memory fails
+      memoryContext = {
+        recentMessages: conversationMessages.map(msg => `${msg.role}: ${msg.content}`),
+        conversationSummary: '',
+        relevantMemories: [],
+        userContext: '',
+      };
+    }
 
     // Create enhanced prompt with memory context
     const enhancedPrompt = `
@@ -83,9 +95,54 @@ ${memoryContext.recentMessages.slice(-6).join('\n')}
 Human: ${message}
 AI Assistant:`;
 
-    // Get AI response using LangChain
-    const aiResponse = await llm.invoke(enhancedPrompt);
-    const aiContent = aiResponse.content as string;
+    // Get AI response using LangChain with error handling
+    let aiContent: string;
+    try {
+      const aiResponse = await llm.invoke(enhancedPrompt);
+      aiContent = aiResponse.content as string;
+    } catch (error: any) {
+      console.error('OpenAI API error:', error);
+      
+      // Handle specific OpenAI errors
+      if (error.name === 'InsufficientQuotaError' || error.status === 429) {
+        return NextResponse.json(
+          { 
+            error: 'OpenAI quota exceeded. Please check your billing or try again later.',
+            details: 'Your OpenAI account has reached its usage limit or rate limit.'
+          },
+          { status: 429 }
+        );
+      }
+      
+      if (error.name === 'RateLimitError') {
+        return NextResponse.json(
+          { 
+            error: 'Rate limit exceeded. Please wait a moment and try again.',
+            details: 'Too many requests to OpenAI API.'
+          },
+          { status: 429 }
+        );
+      }
+      
+      if (error.name === 'AuthenticationError' || error.status === 401) {
+        return NextResponse.json(
+          { 
+            error: 'OpenAI authentication failed. Please check your API key.',
+            details: 'Invalid or expired OpenAI API key.'
+          },
+          { status: 401 }
+        );
+      }
+      
+      // Generic error fallback
+      return NextResponse.json(
+        { 
+          error: 'Failed to get AI response. Please try again.',
+          details: error.message || 'Unknown error occurred'
+        },
+        { status: 500 }
+      );
+    }
 
     // Calculate token usage
     const promptTokens = countTokens(enhancedPrompt);
@@ -134,6 +191,7 @@ AI Assistant:`;
         );
       } catch (error) {
         console.error('Error creating conversation summary:', error);
+        // Don't fail the entire request if summary creation fails
       }
     }
 
