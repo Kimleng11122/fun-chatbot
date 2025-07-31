@@ -16,7 +16,7 @@ export async function GET() {
     }
 
     // Test Firestore connection by trying to read from a test collection
-    const testDoc = await db.collection('test').doc('connection').get();
+    await db.collection('test').doc('connection').get();
     
     return NextResponse.json({
       success: true,

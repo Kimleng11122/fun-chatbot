@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
 import { Brain, X, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

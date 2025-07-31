@@ -104,10 +104,10 @@ export default function DebugEnvPage() {
                     Your OpenAI API key is not configured. Please check:
                   </p>
                   <ul className="list-disc list-inside text-sm text-yellow-700 mt-2">
-                    <li>Create a <code>.env.local</code> file in your project root</li>
-                    <li>Add <code>OPENAI_API_KEY=sk-your-key-here</code></li>
-                    <li>Restart your development server</li>
-                    <li>If deployed, check your deployment platform's environment variables</li>
+                                         <li>Create a <code>.env.local</code> file in your project root</li>
+                     <li>Add <code>OPENAI_API_KEY=sk-your-key-here</code></li>
+                     <li>Restart your development server</li>
+                     <li>If deployed, check your deployment platform&apos;s environment variables</li>
                   </ul>
                 </div>
               )}
@@ -154,14 +154,14 @@ export default function DebugEnvPage() {
             <CardContent>
               <div className="space-y-4">
                 <div>
-                  <h4 className="font-semibold mb-2">If you're still getting quota errors with a new API key:</h4>
+                  <h4 className="font-semibold mb-2">If you&apos;re still getting quota errors with a new API key:</h4>
                   <ol className="list-decimal list-inside space-y-1 text-sm">
                     <li><strong>Restart the development server:</strong> <code>npm run dev</code></li>
                     <li><strong>Clear Next.js cache:</strong> <code>rm -rf .next</code> then restart</li>
                     <li><strong>Check for multiple .env files:</strong> Look for <code>.env</code>, <code>.env.local</code>, <code>.env.development</code></li>
                     <li><strong>Verify API key format:</strong> Should start with <code>sk-</code></li>
                     <li><strong>Check deployment environment:</strong> If testing on Vercel/Netlify, update env vars there</li>
-                    <li><strong>Test API key directly:</strong> Try using it in OpenAI's playground</li>
+                                         <li><strong>Test API key directly:</strong> Try using it in OpenAI&apos;s playground</li>
                   </ol>
                 </div>
                 

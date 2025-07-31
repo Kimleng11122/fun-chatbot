@@ -64,7 +64,7 @@ export async function updateConversation(conversationId: string, updates: Partia
   checkDatabase();
   // Filter out undefined values to avoid Firestore errors
   const filteredUpdates = Object.fromEntries(
-    Object.entries(updates).filter(([_, value]) => value !== undefined)
+    Object.entries(updates).filter(([, value]) => value !== undefined)
   );
   
   await db!.collection('conversations').doc(conversationId).update({
@@ -161,7 +161,7 @@ export async function saveConversationWithMessages(
   
   // Create messages
   const messagesToSave: Message[] = [];
-  messages.forEach((message, _index) => {
+  messages.forEach((message) => {
     const messageRef = db!.collection('messages').doc();
     const newMessage: Message = {
       ...message,

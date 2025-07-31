@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { llm } from '@/lib/langchain';
 import { OPENAI_MODEL } from '@/lib/openai';
 import { memoryService } from '@/lib/memory';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Get OpenAI status from memory service
     const openaiStatus = memoryService.getOpenAIStatus();

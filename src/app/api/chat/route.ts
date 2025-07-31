@@ -100,11 +100,12 @@ AI Assistant:`;
     try {
       const aiResponse = await llm.invoke(enhancedPrompt);
       aiContent = aiResponse.content as string;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('OpenAI API error:', error);
       
       // Handle specific OpenAI errors
-      if (error.name === 'InsufficientQuotaError' || error.status === 429) {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'InsufficientQuotaError' || 
+          error && typeof error === 'object' && 'status' in error && error.status === 429) {
         return NextResponse.json(
           { 
             error: 'OpenAI quota exceeded. Please check your billing or try again later.',
@@ -114,7 +115,7 @@ AI Assistant:`;
         );
       }
       
-      if (error.name === 'RateLimitError') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'RateLimitError') {
         return NextResponse.json(
           { 
             error: 'Rate limit exceeded. Please wait a moment and try again.',
@@ -124,7 +125,8 @@ AI Assistant:`;
         );
       }
       
-      if (error.name === 'AuthenticationError' || error.status === 401) {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'AuthenticationError' || 
+          error && typeof error === 'object' && 'status' in error && error.status === 401) {
         return NextResponse.json(
           { 
             error: 'OpenAI authentication failed. Please check your API key.',
@@ -138,7 +140,7 @@ AI Assistant:`;
       return NextResponse.json(
         { 
           error: 'Failed to get AI response. Please try again.',
-          details: error.message || 'Unknown error occurred'
+          details: (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') ? error.message : 'Unknown error occurred'
         },
         { status: 500 }
       );

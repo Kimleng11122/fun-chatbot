@@ -234,6 +234,7 @@ export class MemoryService {
         }))
         .sort((a, b) => b.relevanceScore - a.relevanceScore)
         .slice(0, limit)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         .map(({ relevanceScore, ...memory }) => memory);
 
       // Update last accessed for retrieved memories
