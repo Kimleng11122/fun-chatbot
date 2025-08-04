@@ -62,7 +62,7 @@ export function EnhancedChatInput({ onSendMessage, disabled = false }: EnhancedC
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message or upload an image..."
+            placeholder="Type your message or upload an image (you can upload images without text)..."
             disabled={disabled}
             className={cn(
               'w-full p-3 border border-gray-300 rounded-lg resize-none',

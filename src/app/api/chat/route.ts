@@ -87,9 +87,19 @@ export async function POST(request: NextRequest) {
     const { userId, conversationId } = body;
     let { message } = body;
 
-    if (!message || !userId) {
+    // Allow empty message if images are present
+    const hasImages = body.images && body.images.length > 0;
+    
+    if ((!message || message.trim() === '') && !hasImages) {
       return NextResponse.json(
-        { error: 'Message and userId are required' },
+        { error: 'Message or images are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'UserId is required' },
         { status: 400 }
       );
     }

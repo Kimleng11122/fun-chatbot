@@ -133,6 +133,7 @@ export function ChatArea({
   const sendMessage = async (content: string, images?: File[]) => {
     console.log('sendMessage called with:', { content, images: images?.length, user: !!user, uid: user?.uid, authLoading });
     
+    // Allow sending if there's content OR images
     if (!content.trim() && (!images || images.length === 0)) return;
 
     // Check if authentication is still loading
