@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Send, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,7 @@ export function EnhancedChatInput({ onSendMessage, disabled = false }: EnhancedC
   const [message, setMessage] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [showImageUpload, setShowImageUpload] = useState(false);
+  const [showImageGenerationHint, setShowImageGenerationHint] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +30,10 @@ export function EnhancedChatInput({ onSendMessage, disabled = false }: EnhancedC
     setImages(prev => [...prev, file]);
   };
 
+  const handleImageGenerationHint = () => {
+    setShowImageGenerationHint(!showImageGenerationHint);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -40,6 +45,31 @@ export function EnhancedChatInput({ onSendMessage, disabled = false }: EnhancedC
     <form onSubmit={handleSubmit} className="flex flex-col gap-2 p-4 border-t bg-white">
       {showImageUpload && (
         <ImageUpload onImageUpload={handleImageUpload} disabled={disabled} />
+      )}
+      
+      {showImageGenerationHint && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          <p className="font-medium mb-2">💡 Image Tips:</p>
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-xs text-blue-700 mb-1">🎨 Generate Images:</p>
+              <ul className="space-y-1 text-xs">
+                <li>• "Generate an image of a sunset over mountains"</li>
+                <li>• "Create a picture of a cute cat playing"</li>
+                <li>• "Make an image of a futuristic city"</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-xs text-blue-700 mb-1">✏️ Modify Images:</p>
+              <ul className="space-y-1 text-xs">
+                <li>• "Add mountains before the sunset"</li>
+                <li>• "Remove the person from the background"</li>
+                <li>• "Change the sky to blue"</li>
+                <li>• "Make the cat orange instead of black"</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       )}
       
       <div className="flex items-end gap-2">
@@ -57,12 +87,27 @@ export function EnhancedChatInput({ onSendMessage, disabled = false }: EnhancedC
           <ImageIcon size={20} />
         </button>
         
+        <button
+          type="button"
+          onClick={handleImageGenerationHint}
+          disabled={disabled}
+          className={cn(
+            'p-3 text-gray-500 hover:text-purple-500 rounded-lg',
+            'hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+            'transition-colors duration-200'
+          )}
+          title="Image Generation Tips"
+        >
+          <Sparkles size={20} />
+        </button>
+        
         <div className="flex-1">
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your message or upload an image (you can upload images without text)..."
+            placeholder="Type your message, upload an image, or ask me to generate/modify an image..."
             disabled={disabled}
             className={cn(
               'w-full p-3 border border-gray-300 rounded-lg resize-none',

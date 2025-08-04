@@ -112,6 +112,7 @@ export interface UsageRecord {
   // New fields for image usage tracking
   imageAnalysisCost?: number;
   imageGenerationCost?: number;
+  imageModificationCost?: number;
   storageCost?: number;
 }
 

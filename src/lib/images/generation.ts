@@ -1,11 +1,70 @@
 import OpenAI from 'openai';
 import { ImageGenerationRequest, ImageGenerationResponse } from '@/types/chat';
+import sharp from 'sharp';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export class ImageGenerationService {
+  /**
+   * Validate and sanitize prompt for safety
+   * 
+   * This method checks for potentially problematic content and sanitizes the prompt
+   * to ensure it complies with OpenAI's content policy. It also adds safety modifiers
+   * to make the prompt more likely to be accepted.
+   * 
+   * @param prompt - The original user prompt
+   * @returns Object containing validation result, sanitized prompt, and any error message
+   */
+  private validateAndSanitizePrompt(prompt: string): { valid: boolean; sanitizedPrompt: string; error?: string } {
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // List of potentially problematic terms that might trigger safety filters
+    const problematicTerms = [
+      'nude', 'naked', 'explicit', 'sexual', 'violence', 'blood', 'gore', 'weapon', 'gun',
+      'knife', 'sword', 'bomb', 'explosion', 'death', 'kill', 'murder', 'suicide',
+      'hate', 'racist', 'discriminatory', 'offensive', 'inappropriate'
+    ];
+    
+    // Check for problematic terms
+    for (const term of problematicTerms) {
+      if (lowerPrompt.includes(term)) {
+        return {
+          valid: false,
+          sanitizedPrompt: '',
+          error: `Prompt contains potentially inappropriate content: "${term}". Please try a different description.`
+        };
+      }
+    }
+    
+    // Check if prompt is too short or vague
+    if (prompt.trim().length < 3) {
+      return {
+        valid: false,
+        sanitizedPrompt: '',
+        error: 'Prompt is too short. Please provide a more detailed description.'
+      };
+    }
+    
+    // Sanitize the prompt
+    let sanitizedPrompt = prompt
+      .trim()
+      .replace(/[^\w\s\-.,!?()]/g, '') // Remove special characters except basic punctuation
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .substring(0, 1000); // Limit length
+    
+    // Add safety modifiers for better results
+    if (!sanitizedPrompt.includes('safe') && !sanitizedPrompt.includes('appropriate')) {
+      sanitizedPrompt = `A safe, appropriate, and family-friendly ${sanitizedPrompt}`;
+    }
+    
+    return {
+      valid: true,
+      sanitizedPrompt
+    };
+  }
+
   /**
    * Generate an image from text prompt using DALL-E
    */
@@ -18,10 +77,26 @@ export class ImageGenerationService {
         conversationContext
       } = request;
 
+      // Validate and sanitize the prompt
+      const validation = this.validateAndSanitizePrompt(prompt);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
       // Enhance prompt with conversation context if available
-      const enhancedPrompt = conversationContext 
-        ? `${prompt}. Context: ${conversationContext}`
-        : prompt;
+      let enhancedPrompt = validation.sanitizedPrompt;
+      if (conversationContext) {
+        // Only add context if it's safe and relevant
+        const contextValidation = this.validateAndSanitizePrompt(conversationContext);
+        if (contextValidation.valid) {
+          enhancedPrompt = `${validation.sanitizedPrompt}. Context: ${contextValidation.sanitizedPrompt}`;
+        }
+      }
+
+      // Ensure the final prompt is safe and appropriate
+      if (!enhancedPrompt.toLowerCase().includes('safe') && !enhancedPrompt.toLowerCase().includes('appropriate')) {
+        enhancedPrompt = `A safe, appropriate, and family-friendly image of ${enhancedPrompt}`;
+      }
 
       const response = await openai.images.generate({
         model: "dall-e-3",
@@ -42,9 +117,52 @@ export class ImageGenerationService {
         size: size,
         timestamp: new Date()
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Image generation failed:', error);
-      throw new Error('Failed to generate image. Please try again.');
+      
+      // Handle specific OpenAI errors
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'content_policy_violation') {
+        throw new Error('The image description contains content that violates our safety guidelines. Please try a different, more appropriate description.');
+      }
+      
+      if (error && typeof error === 'object' && 'status' in error && error.status === 400) {
+        throw new Error('Invalid request. Please provide a clearer, more specific description of the image you want.');
+      }
+      
+      if (error && typeof error === 'object' && 'status' in error && error.status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+      }
+      
+      if (error && typeof error === 'object' && 'status' in error && error.status === 401) {
+        throw new Error('Authentication failed. Please check your API configuration.');
+      }
+      
+      // Generic error
+      throw new Error('Failed to generate image. Please try again with a different description.');
+    }
+  }
+
+  /**
+   * Convert image to RGBA format using Sharp (for server-side)
+   * This ensures the image is in the correct format for OpenAI's image editing API
+   */
+  private async convertToRGBA_Server(imageBase64: string): Promise<string> {
+    try {
+      const buffer = Buffer.from(imageBase64, 'base64');
+      
+      // Use sharp to convert the image to PNG with RGBA format
+      const processedBuffer = await sharp(buffer)
+        .png() // Ensure PNG format
+        .ensureAlpha() // Ensure alpha channel exists (RGBA)
+        .toBuffer();
+      
+      // Convert back to base64
+      return processedBuffer.toString('base64');
+    } catch (error) {
+      console.error('Error converting image to RGBA:', error);
+      // If conversion fails, return the original base64
+      // This might still work if the image is already in the correct format
+      return imageBase64;
     }
   }
 
@@ -57,8 +175,17 @@ export class ImageGenerationService {
     maskBase64?: string
   ): Promise<ImageGenerationResponse> {
     try {
+      // Convert image to RGBA format for OpenAI API compatibility
+      let processedImageBase64: string;
+      try {
+        processedImageBase64 = await this.convertToRGBA_Server(imageBase64);
+      } catch (conversionError) {
+        console.warn('Image format conversion failed, using original:', conversionError);
+        processedImageBase64 = imageBase64;
+      }
+
       // Convert base64 to File object for OpenAI API
-      const imageBlob = new Blob([Buffer.from(imageBase64, 'base64')], { type: 'image/png' });
+      const imageBlob = new Blob([Buffer.from(processedImageBase64, 'base64')], { type: 'image/png' });
       const imageFile = new File([imageBlob], 'image.png', { type: 'image/png' });
       
       const editParams: {
@@ -75,7 +202,16 @@ export class ImageGenerationService {
       };
       
       if (maskBase64) {
-        const maskBlob = new Blob([Buffer.from(maskBase64, 'base64')], { type: 'image/png' });
+        // Also convert mask to RGBA format
+        let processedMaskBase64: string;
+        try {
+          processedMaskBase64 = await this.convertToRGBA_Server(maskBase64);
+        } catch (conversionError) {
+          console.warn('Mask format conversion failed, using original:', conversionError);
+          processedMaskBase64 = maskBase64;
+        }
+        
+        const maskBlob = new Blob([Buffer.from(processedMaskBase64, 'base64')], { type: 'image/png' });
         const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
         editParams.mask = maskFile;
       }
@@ -94,6 +230,17 @@ export class ImageGenerationService {
       };
     } catch (error) {
       console.error('Image editing failed:', error);
+      
+      // Provide more specific error messages
+      if (error && typeof error === 'object' && 'message' in error) {
+        const errorMessage = error.message as string;
+        if (errorMessage.includes('Invalid input image - format must be in')) {
+          throw new Error('Image format not supported. Please try uploading a different image or ensure it\'s in PNG format.');
+        } else if (errorMessage.includes('safety guidelines')) {
+          throw new Error('The image modification request violates safety guidelines. Please try a different modification.');
+        }
+      }
+      
       throw new Error('Failed to edit image. Please try again.');
     }
   }
@@ -106,8 +253,17 @@ export class ImageGenerationService {
     count: number = 3
   ): Promise<ImageGenerationResponse[]> {
     try {
+      // Convert image to RGBA format for OpenAI API compatibility
+      let processedImageBase64: string;
+      try {
+        processedImageBase64 = await this.convertToRGBA_Server(imageBase64);
+      } catch (conversionError) {
+        console.warn('Image format conversion failed, using original:', conversionError);
+        processedImageBase64 = imageBase64;
+      }
+
       // Convert base64 to File object for OpenAI API
-      const imageBlob = new Blob([Buffer.from(imageBase64, 'base64')], { type: 'image/png' });
+      const imageBlob = new Blob([Buffer.from(processedImageBase64, 'base64')], { type: 'image/png' });
       const imageFile = new File([imageBlob], 'image.png', { type: 'image/png' });
       
       const response = await openai.images.createVariation({
@@ -128,6 +284,17 @@ export class ImageGenerationService {
       }));
     } catch (error) {
       console.error('Image variation generation failed:', error);
+      
+      // Provide more specific error messages
+      if (error && typeof error === 'object' && 'message' in error) {
+        const errorMessage = error.message as string;
+        if (errorMessage.includes('Invalid input image - format must be in')) {
+          throw new Error('Image format not supported. Please try uploading a different image or ensure it\'s in PNG format.');
+        } else if (errorMessage.includes('safety guidelines')) {
+          throw new Error('The image variation request violates safety guidelines. Please try a different image.');
+        }
+      }
+      
       throw new Error('Failed to generate image variations. Please try again.');
     }
   }
@@ -166,6 +333,24 @@ export class ImageGenerationService {
     }
 
     return { valid: true };
+  }
+
+  /**
+   * Get safe prompt suggestions for users
+   */
+  getSafePromptSuggestions(): string[] {
+    return [
+      "A peaceful mountain landscape at sunset",
+      "A cute cartoon cat playing with a ball",
+      "A modern office workspace with plants",
+      "A colorful abstract painting with geometric shapes",
+      "A cozy coffee shop interior",
+      "A beautiful garden with flowers and butterflies",
+      "A futuristic city skyline at night",
+      "A vintage car parked on a scenic road",
+      "A magical forest with glowing mushrooms",
+      "A professional portrait of a business person"
+    ];
   }
 
   /**

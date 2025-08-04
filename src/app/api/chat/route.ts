@@ -12,6 +12,8 @@ import { memoryService } from '@/lib/memory';
 import { llm } from '@/lib/langchain';
 import { ImageStorageService } from '@/lib/images/storage';
 import { ImageAnalysisService } from '@/lib/images/analysis';
+import { ImageGenerationService } from '@/lib/images/generation';
+import { generateId } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -238,7 +240,7 @@ Human: ${message}`;
     if (imageAttachments.length > 0) {
       enhancedPrompt += `\n\nThe user has uploaded an image. Here's what I can see in the image:`;
       
-      imageAttachments.forEach((attachment, index) => {
+      imageAttachments.forEach((attachment) => {
         if (attachment.analysis) {
           enhancedPrompt += `\n\n${attachment.analysis.description}`;
         }
@@ -248,6 +250,48 @@ Human: ${message}`;
     }
 
     enhancedPrompt += `\n\nAI Assistant:`;
+
+    // Check if this is an image generation request
+    const imageGenerationKeywords = [
+      'generate', 'create', 'make', 'draw', 'design', 'produce', 'generate an image', 
+      'create an image', 'make an image', 'draw an image', 'design an image',
+      'generate a picture', 'create a picture', 'make a picture', 'draw a picture',
+      'generate a photo', 'create a photo', 'make a photo'
+    ];
+    
+    // Check if this is an image modification request
+    const imageModificationKeywords = [
+      'add', 'remove', 'change', 'modify', 'edit', 'replace', 'adjust',
+      'make', 'turn', 'transform', 'alter', 'update', 'fix', 'correct',
+      'put', 'insert', 'delete', 'erase', 'modify the image', 'edit the image',
+      'change the image', 'add to the image', 'remove from the image'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    const isImageGenerationRequest = imageGenerationKeywords.some(keyword => 
+      lowerMessage.includes(keyword.toLowerCase())
+    );
+    
+    const isImageModificationRequest = imageModificationKeywords.some(keyword => 
+      lowerMessage.includes(keyword.toLowerCase())
+    );
+
+    // Check if there are images in the conversation for modification
+    const conversationHasImages = conversationMessages.some(msg => 
+      msg.images && msg.images.length > 0
+    );
+    
+    const canModifyImage = isImageModificationRequest && conversationHasImages;
+
+    // If it's an image generation request, update message type
+    if (isImageGenerationRequest) {
+      messageType = 'image-generation';
+    }
+    
+    // If it's an image modification request, update message type
+    if (canModifyImage) {
+      messageType = 'image-modification';
+    }
 
     // Get AI response using LangChain with error handling
     let aiContent: string;
@@ -300,6 +344,143 @@ Human: ${message}`;
       );
     }
 
+    // Handle image generation if requested
+    if (isImageGenerationRequest) {
+      try {
+        const generationService = new ImageGenerationService();
+        
+        // Extract the prompt from the message (remove generation keywords)
+        let prompt = message;
+        for (const keyword of imageGenerationKeywords) {
+          prompt = prompt.replace(new RegExp(keyword, 'gi'), '').trim();
+        }
+        
+        // Clean up the prompt
+        prompt = prompt.replace(/^(of|a|an)\s+/i, '').trim();
+        
+        if (!prompt) {
+          prompt = 'a beautiful landscape'; // fallback prompt
+        }
+        
+        // Generate the image
+        const result = await generationService.generateFromText({
+          prompt,
+          size: '1024x1024',
+          quality: 'standard',
+          conversationContext: memoryContext?.conversationSummary || ''
+        });
+        
+        // Create image attachment for the generated image
+        const generatedImageAttachment: ImageAttachment = {
+          id: generateId(),
+          url: result.url,
+          filename: `generated_${Date.now()}.png`,
+          size: 0, // We don't know the actual size
+          mimeType: 'image/png',
+          width: 1024,
+          height: 1024,
+          uploadTimestamp: new Date(),
+        };
+        
+        imageAttachments.push(generatedImageAttachment);
+        
+        // Update the AI content to acknowledge the generation
+        aiContent = `I've generated an image based on your request: "${prompt}". Here's what I created for you:`;
+        
+      } catch (error: unknown) {
+        console.error('Image generation failed:', error);
+        
+        // Provide more specific error messages based on the error type
+        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' 
+          ? error.message 
+          : '';
+          
+        if (errorMessage.includes('safety guidelines') || errorMessage.includes('inappropriate content')) {
+          aiContent = `I couldn't generate that image because: ${errorMessage}. Please try describing something more appropriate and family-friendly.`;
+        } else if (errorMessage.includes('Invalid request')) {
+          aiContent = `I couldn't generate that image because: ${errorMessage}. Please be more specific about what you'd like to see.`;
+        } else if (errorMessage.includes('Rate limit')) {
+          aiContent = "I'm experiencing high demand right now. Please wait a moment and try again.";
+        } else {
+          aiContent = "I'm sorry, I wasn't able to generate an image for you. Please try again with a different description. Make sure your request is clear and appropriate.";
+        }
+      }
+    }
+
+    // Handle image modification if requested
+    if (canModifyImage) {
+      try {
+        const generationService = new ImageGenerationService();
+        
+        // Find the most recent image in the conversation
+        const recentImageMessage = conversationMessages
+          .filter(msg => msg.images && msg.images.length > 0)
+          .pop();
+        
+        if (!recentImageMessage || !recentImageMessage.images || recentImageMessage.images.length === 0) {
+          aiContent = "I couldn't find an image to modify. Please upload an image first, then ask me to modify it.";
+        } else {
+          const imageToModify = recentImageMessage.images[0]; // Use the first image
+          
+          // Extract the modification prompt from the message
+          let modificationPrompt = message;
+          for (const keyword of imageModificationKeywords) {
+            modificationPrompt = modificationPrompt.replace(new RegExp(keyword, 'gi'), '').trim();
+          }
+          
+          // Clean up the prompt
+          modificationPrompt = modificationPrompt.replace(/^(the|this|that)\s+/i, '').trim();
+          
+          if (!modificationPrompt) {
+            modificationPrompt = 'modify the image as requested';
+          }
+          
+          // Download the image from storage
+          const response = await fetch(imageToModify.url);
+          const imageBuffer = await response.arrayBuffer();
+          const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+          
+          // Modify the image
+          const result = await generationService.editImage(imageBase64, modificationPrompt);
+          
+          // Create image attachment for the modified image
+          const modifiedImageAttachment: ImageAttachment = {
+            id: generateId(),
+            url: result.url,
+            filename: `modified_${Date.now()}.png`,
+            size: 0, // We don't know the actual size
+            mimeType: 'image/png',
+            width: 1024,
+            height: 1024,
+            uploadTimestamp: new Date(),
+          };
+          
+          imageAttachments.push(modifiedImageAttachment);
+          
+          // Update the AI content to acknowledge the modification
+          aiContent = `I've modified the image based on your request: "${modificationPrompt}". Here's the modified version:`;
+        }
+        
+      } catch (error: unknown) {
+        console.error('Image modification failed:', error);
+        
+        // Provide more specific error messages based on the error type
+        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' 
+          ? error.message 
+          : '';
+          
+        if (errorMessage.includes('safety guidelines') || errorMessage.includes('inappropriate content')) {
+          aiContent = `I couldn't modify that image because: ${errorMessage}. Please try describing a more appropriate modification.`;
+        } else if (errorMessage.includes('Invalid request')) {
+          aiContent = `I couldn't modify that image because: ${errorMessage}. Please be more specific about what you'd like to change.`;
+        } else if (errorMessage.includes('Rate limit')) {
+          aiContent = "I'm experiencing high demand right now. Please wait a moment and try again.";
+        } else {
+          aiContent = "I'm sorry, I wasn't able to modify the image. Please try again with a different description. Make sure your request is clear and appropriate.";
+        }
+      }
+    }
+
     // Calculate token usage
     const promptTokens = countTokens(enhancedPrompt);
     const completionTokens = countTokens(aiContent);
@@ -308,7 +489,8 @@ Human: ${message}`;
 
     // Calculate image-related costs
     let imageAnalysisCost = 0;
-    const imageGenerationCost = 0;
+    let imageGenerationCost = 0;
+    let imageModificationCost = 0;
     let storageCost = 0;
     
     if (imageAttachments.length > 0) {
@@ -318,6 +500,16 @@ Human: ${message}`;
       // Estimate storage costs (rough calculation)
       const totalImageSize = imageAttachments.reduce((sum, img) => sum + img.size, 0);
       storageCost = (totalImageSize / (1024 * 1024 * 1024)) * 0.02; // ~$0.02 per GB
+    }
+    
+    // Calculate image generation costs if applicable
+    if (isImageGenerationRequest) {
+      imageGenerationCost = 0.04; // ~$0.04 per DALL-E 3 generation
+    }
+    
+    // Calculate image modification costs if applicable
+    if (canModifyImage) {
+      imageModificationCost = 0.04; // ~$0.04 per DALL-E 3 modification
     }
 
     // Save usage record
@@ -333,6 +525,7 @@ Human: ${message}`;
       timestamp: new Date(),
       imageAnalysisCost,
       imageGenerationCost,
+      imageModificationCost,
       storageCost,
     });
 
@@ -344,7 +537,9 @@ Human: ${message}`;
       conversationId: currentConversationId,
       userId,
       ...(imageAttachments.length > 0 && { images: imageAttachments }),
-      messageType: imageAttachments.length > 0 ? 'image-analysis' : 'text',
+      messageType: isImageGenerationRequest ? 'image-generation' : 
+                   canModifyImage ? 'image-modification' :
+                   imageAttachments.length > 0 ? 'image-analysis' : 'text',
     };
 
     // Save AI message to database
