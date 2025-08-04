@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { OPENAI_MODEL, countTokens, calculateCost } from '@/lib/openai';
-import { ChatRequest, ChatResponse, Message } from '@/types/chat';
+import { ChatRequest, ChatResponse, Message, ImageAttachment } from '@/types/chat';
 import { 
   saveMessage, 
   createConversation, 
@@ -10,9 +10,14 @@ import {
 } from '@/lib/database';
 import { memoryService } from '@/lib/memory';
 import { llm } from '@/lib/langchain';
+import { ImageStorageService } from '@/lib/images/storage';
+import { ImageAnalysisService } from '@/lib/images/analysis';
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Chat API - Request received');
+    console.log('Chat API - Headers:', Object.fromEntries(request.headers.entries()));
+    
     // Check if LLM is available
     if (!llm) {
       return NextResponse.json(
@@ -21,8 +26,66 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: ChatRequest = await request.json();
-    const { message, userId, conversationId } = body;
+        // Parse request body based on content type
+    let body: ChatRequest;
+    const contentType = request.headers.get('content-type') || '';
+    
+    console.log('Chat API - Content-Type:', contentType);
+    
+    if (contentType.includes('application/json')) {
+      // Handle JSON request
+      try {
+        body = await request.json();
+        console.log('Chat API - Parsed JSON body:', body);
+      } catch (parseError) {
+        console.error('Chat API - JSON parse error:', parseError);
+        return NextResponse.json(
+          { error: 'Invalid JSON in request body' },
+          { status: 400 }
+        );
+      }
+    } else if (contentType.includes('multipart/form-data') || contentType === '') {
+      // Handle FormData request (for image uploads)
+      try {
+        const formData = await request.formData();
+        
+        const message = formData.get('message') as string;
+        const userId = formData.get('userId') as string;
+        const conversationId = formData.get('conversationId') as string;
+        const messageType = formData.get('messageType') as string;
+        
+        // Get image files
+        const imageFiles: File[] = [];
+        const images = formData.getAll('images');
+        for (const image of images) {
+          if (image instanceof File) {
+            imageFiles.push(image);
+          }
+        }
+        
+        body = {
+          message,
+          userId,
+          conversationId: conversationId || undefined,
+          images: imageFiles.length > 0 ? imageFiles : undefined,
+          messageType: messageType as 'text' | 'image-upload' | 'image-generation' | 'image-modification' | undefined,
+        };
+      } catch (formDataError) {
+        console.error('Chat API - FormData parse error:', formDataError);
+        return NextResponse.json(
+          { error: 'Invalid FormData in request body' },
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: 'Unsupported content type. Use application/json or multipart/form-data' },
+        { status: 400 }
+      );
+    }
+
+    const { userId, conversationId } = body;
+    let { message } = body;
 
     if (!message || !userId) {
       return NextResponse.json(
@@ -47,6 +110,71 @@ export async function POST(request: NextRequest) {
       isNewConversation = true;
     }
 
+    // Handle image uploads if present
+    const imageAttachments: ImageAttachment[] = [];
+    let messageType: 'text' | 'image-upload' | 'image-analysis' | 'image-generation' | 'image-modification' = 'text';
+    
+    if (body.images && body.images.length > 0) {
+      console.log('Processing images:', body.images.length);
+      messageType = 'image-upload';
+      const storageService = new ImageStorageService();
+      const analysisService = new ImageAnalysisService();
+      
+      // Process each uploaded image
+      for (const imageFile of body.images) {
+        try {
+          console.log('Processing image:', imageFile.name, 'Size:', imageFile.size);
+          
+          // Upload image to storage
+          const imageAttachment = await storageService.createImageAttachment(
+            imageFile,
+            userId,
+            currentConversationId
+          );
+          
+          console.log('Image uploaded, analyzing content...');
+          
+          // Analyze image content
+          const imageBuffer = await imageFile.arrayBuffer();
+          const base64 = Buffer.from(imageBuffer).toString('base64');
+          const analysis = await analysisService.analyzeImage(base64);
+          
+          console.log('Image analysis completed:', {
+            descriptionLength: analysis.description.length,
+            descriptionPreview: analysis.description.substring(0, 100) + '...'
+          });
+          
+          // Add analysis to attachment
+          imageAttachment.analysis = analysis;
+          imageAttachments.push(imageAttachment);
+          
+          console.log('Image attachment created:', {
+            id: imageAttachment.id,
+            url: imageAttachment.url,
+            filename: imageAttachment.filename
+          });
+          
+          // Store analysis in attachment (don't add to message content)
+          // The AI will generate a user-friendly response based on the analysis
+        } catch (error) {
+          console.error('Failed to process image:', error);
+          
+          // Add error information to message for debugging
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          message += `\n\n[Image Processing Error: ${errorMessage}]`;
+          
+          // Continue with other images even if one fails
+        }
+      }
+      
+      console.log('Total image attachments created:', imageAttachments.length);
+    }
+    
+    // Set message type if specified
+    if (body.messageType) {
+      messageType = body.messageType;
+    }
+
     // Create user message
     const userMessage: Omit<Message, 'id'> = {
       role: 'user',
@@ -54,6 +182,8 @@ export async function POST(request: NextRequest) {
       timestamp: new Date(),
       conversationId: currentConversationId,
       userId,
+      ...(imageAttachments.length > 0 && { images: imageAttachments }),
+      ...(messageType && { messageType }),
     };
 
     // Save user message to database
@@ -81,8 +211,8 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Create enhanced prompt with memory context
-    const enhancedPrompt = `
+    // Create enhanced prompt with memory context and image analysis
+    let enhancedPrompt = `
 You are a helpful AI assistant with access to conversation history and memory. 
 Your goal is to provide helpful, accurate, and contextually relevant responses.
 
@@ -92,8 +222,22 @@ ${memoryContext.conversationSummary ? `Current conversation summary:\n${memoryCo
 Recent conversation:
 ${memoryContext.recentMessages.slice(-6).join('\n')}
 
-Human: ${message}
-AI Assistant:`;
+Human: ${message}`;
+
+    // Add image analysis context if images are present
+    if (imageAttachments.length > 0) {
+      enhancedPrompt += `\n\nThe user has uploaded an image. Here's what I can see in the image:`;
+      
+      imageAttachments.forEach((attachment, index) => {
+        if (attachment.analysis) {
+          enhancedPrompt += `\n\n${attachment.analysis.description}`;
+        }
+      });
+      
+      enhancedPrompt += `\n\nPlease respond naturally to the user's request about the image. Describe what you see in a conversational way, as if you're talking to a friend. Do not mention that you analyzed the image or that you're an AI. Just describe what you observe in the image naturally.`;
+    }
+
+    enhancedPrompt += `\n\nAI Assistant:`;
 
     // Get AI response using LangChain with error handling
     let aiContent: string;
@@ -152,6 +296,20 @@ AI Assistant:`;
     const totalTokens = promptTokens + completionTokens;
     const cost = calculateCost(promptTokens, completionTokens, OPENAI_MODEL);
 
+    // Calculate image-related costs
+    let imageAnalysisCost = 0;
+    const imageGenerationCost = 0;
+    let storageCost = 0;
+    
+    if (imageAttachments.length > 0) {
+      // Estimate Vision API costs (rough calculation)
+      imageAnalysisCost = imageAttachments.length * 0.01; // ~$0.01 per image analysis
+      
+      // Estimate storage costs (rough calculation)
+      const totalImageSize = imageAttachments.reduce((sum, img) => sum + img.size, 0);
+      storageCost = (totalImageSize / (1024 * 1024 * 1024)) * 0.02; // ~$0.02 per GB
+    }
+
     // Save usage record
     await saveUsageRecord({
       userId,
@@ -163,15 +321,20 @@ AI Assistant:`;
       totalTokens,
       cost,
       timestamp: new Date(),
+      imageAnalysisCost,
+      imageGenerationCost,
+      storageCost,
     });
 
-    // Create AI message
+    // Create AI message with image attachments if present
     const aiMessage: Omit<Message, 'id'> = {
       role: 'assistant',
       content: aiContent,
       timestamp: new Date(),
       conversationId: currentConversationId,
       userId,
+      ...(imageAttachments.length > 0 && { images: imageAttachments }),
+      messageType: imageAttachments.length > 0 ? 'image-analysis' : 'text',
     };
 
     // Save AI message to database
@@ -206,8 +369,32 @@ AI Assistant:`;
     return NextResponse.json(response);
   } catch (error) {
     console.error('Chat API error:', error);
+    
+    // Provide more specific error information
+    let errorMessage = 'Failed to process chat request';
+    let errorDetails = '';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      errorDetails = error.stack || '';
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String(error.message);
+    }
+    
+    console.error('Detailed error information:', {
+      message: errorMessage,
+      details: errorDetails,
+      timestamp: new Date().toISOString()
+    });
+    
     return NextResponse.json(
-      { error: 'Failed to process chat request' },
+      { 
+        error: errorMessage,
+        details: errorDetails,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }

@@ -107,7 +107,12 @@ export async function saveMessage(message: Omit<Message, 'id'>): Promise<Message
     id: messageRef.id,
   };
   
-  await messageRef.set(newMessage);
+  // Filter out undefined values to avoid Firestore errors
+  const messageToSave = Object.fromEntries(
+    Object.entries(newMessage).filter(([, value]) => value !== undefined)
+  );
+  
+  await messageRef.set(messageToSave);
   return newMessage;
 }
 
@@ -168,7 +173,13 @@ export async function saveConversationWithMessages(
       id: messageRef.id,
       conversationId: newConversation.id,
     };
-    batch.set(messageRef, newMessage);
+    
+    // Filter out undefined values to avoid Firestore errors
+    const messageToSave = Object.fromEntries(
+      Object.entries(newMessage).filter(([, value]) => value !== undefined)
+    );
+    
+    batch.set(messageRef, messageToSave);
     messagesToSave.push(newMessage);
   });
   
@@ -255,6 +266,15 @@ export async function getUserUsageStats(userId: string, days: number = 30): Prom
     usageByDate[dateKey].messages += 1;
   });
   
+  // Calculate image-related stats
+  const totalImages = records.filter(record => record.imageAnalysisCost || record.imageGenerationCost).length;
+  const totalImageAnalysis = records.filter(record => record.imageAnalysisCost).length;
+  const totalImageGenerations = records.filter(record => record.imageGenerationCost).length;
+  
+  const imageAnalysisCost = records.reduce((sum, record) => sum + (record.imageAnalysisCost || 0), 0);
+  const imageGenerationCost = records.reduce((sum, record) => sum + (record.imageGenerationCost || 0), 0);
+  const storageCost = records.reduce((sum, record) => sum + (record.storageCost || 0), 0);
+  
   return {
     totalTokens,
     totalCost,
@@ -262,5 +282,13 @@ export async function getUserUsageStats(userId: string, days: number = 30): Prom
     averageTokensPerMessage,
     usageByModel,
     usageByDate,
+    totalImages,
+    totalImageAnalysis,
+    totalImageGenerations,
+    imageCosts: {
+      analysis: imageAnalysisCost,
+      generation: imageGenerationCost,
+      storage: storageCost,
+    },
   };
 } 

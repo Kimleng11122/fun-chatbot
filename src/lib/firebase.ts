@@ -1,8 +1,10 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getStorage, Storage } from 'firebase-admin/storage';
 
 // Initialize Firebase Admin SDK only if environment variables are available
 let db: Firestore | null = null;
+let storage: Storage | null = null;
 
 if (!getApps().length) {
   // Check if all required environment variables are present
@@ -48,12 +50,17 @@ if (!getApps().length) {
           clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
           privateKey: privateKey,
         }),
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
       });
       console.log('Firebase Admin SDK initialized successfully');
       
       // Initialize Firestore after app initialization
       db = getFirestore();
       console.log('Firestore database initialized successfully');
+      
+      // Initialize Storage after app initialization
+      storage = getStorage();
+      console.log('Firebase Storage initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Firebase Admin SDK:', error);
       console.error('Please check your Firebase service account credentials');
@@ -61,17 +68,18 @@ if (!getApps().length) {
     }
   }
 } else {
-  // If apps already exist, get the Firestore instance
+  // If apps already exist, get the Firestore and Storage instances
   db = getFirestore();
-  console.log('Using existing Firebase app, Firestore initialized');
+  storage = getStorage();
+  console.log('Using existing Firebase app, Firestore and Storage initialized');
 }
 
-// Export db
-export { db };
+// Export db and storage
+export { db, storage };
 
 // Add a helper function to check if Firebase is properly configured
 export function isFirebaseConfigured(): boolean {
-  return db !== null;
+  return db !== null && storage !== null;
 }
 
 // Client-side Firebase config (for future use)

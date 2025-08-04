@@ -5,6 +5,9 @@ export interface Message {
   timestamp: Date;
   conversationId: string;
   userId: string;
+  // New fields for images
+  images?: ImageAttachment[];
+  messageType?: 'text' | 'image-upload' | 'image-analysis' | 'image-generation' | 'image-modification';
 }
 
 export interface Conversation {
@@ -28,12 +31,70 @@ export interface ChatRequest {
   message: string;
   userId: string;
   conversationId?: string;
+  images?: File[];
+  messageType?: 'text' | 'image-upload' | 'image-generation' | 'image-modification';
 }
 
 export interface ChatResponse {
   message: Message;
   conversationId: string;
   isNewConversation: boolean;
+}
+
+// New interfaces for image support
+export interface ImageAttachment {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  width: number;
+  height: number;
+  uploadTimestamp: Date;
+  analysis?: ImageAnalysis;
+  modifications?: ImageModification[];
+}
+
+export interface ImageAnalysis {
+  description: string;
+  textContent?: string;
+  objects: string[];
+  colors: string[];
+  confidence: number;
+}
+
+export interface ImageModification {
+  id: string;
+  originalImageId: string;
+  prompt: string;
+  generatedImageUrl: string;
+  timestamp: Date;
+  status: 'pending' | 'completed' | 'failed';
+}
+
+export interface ImageGenerationRequest {
+  prompt: string;
+  size?: '1024x1024' | '1792x1024' | '1024x1792';
+  quality?: 'standard' | 'hd';
+  conversationContext?: string;
+}
+
+export interface ImageGenerationResponse {
+  url: string;
+  prompt: string;
+  size: string;
+  timestamp: Date;
+}
+
+export interface ImageUploadRequest {
+  file: File;
+  userId: string;
+  conversationId: string;
+}
+
+export interface ImageUploadResponse {
+  image: ImageAttachment;
+  analysis?: ImageAnalysis;
 }
 
 // Usage tracking types
@@ -48,6 +109,10 @@ export interface UsageRecord {
   totalTokens: number;
   cost: number;
   timestamp: Date;
+  // New fields for image usage tracking
+  imageAnalysisCost?: number;
+  imageGenerationCost?: number;
+  storageCost?: number;
 }
 
 export interface UsageStats {
@@ -57,6 +122,15 @@ export interface UsageStats {
   averageTokensPerMessage: number;
   usageByModel: Record<string, { tokens: number; cost: number; messages: number }>;
   usageByDate: Record<string, { tokens: number; cost: number; messages: number }>;
+  // New fields for image usage
+  totalImages: number;
+  totalImageAnalysis: number;
+  totalImageGenerations: number;
+  imageCosts: {
+    analysis: number;
+    generation: number;
+    storage: number;
+  };
 }
 
 export interface PricingInfo {
@@ -64,6 +138,9 @@ export interface PricingInfo {
   inputPricePer1kTokens: number;
   outputPricePer1kTokens: number;
   description: string;
+  // New fields for image pricing
+  imageAnalysisPrice?: number;
+  imageGenerationPrice?: number;
 }
 
 export interface UsageResponse {

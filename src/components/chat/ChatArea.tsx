@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Message } from '@/types/chat';
 import { MessageBubble } from './MessageBubble';
-import { ChatInput } from './ChatInput';
+import { EnhancedChatInput } from './EnhancedChatInput';
 import { MemoryIndicator, MemoryDetails } from './MemoryIndicator';
 import { UsageIndicator } from '@/components/chat/UsageIndicator';
 import { generateId, deserializeMessage } from '@/lib/utils';
@@ -47,54 +47,219 @@ export function ChatArea({
   isLoadingConversation,
   onMessagesUpdate 
 }: ChatAreaProps) {
+  console.log('ChatArea rendered with props:', {
+    conversationId,
+    messagesCount: messages.length,
+    isLoadingConversation,
+    timestamp: new Date().toISOString()
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [showMemoryDetails, setShowMemoryDetails] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Get authenticated user
-  const { user, logout } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const userId = user?.uid || '';
+
+  // Debug authentication state
+  console.log('Auth state:', { 
+    user: !!user, 
+    uid: user?.uid, 
+    email: user?.email,
+    loading: authLoading,
+    timestamp: new Date().toISOString()
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Function to clean up message content by removing JSON analysis text
+  const cleanMessageContent = (content: string): string => {
+    // Remove JSON analysis patterns that might be embedded in the content
+    const jsonPatterns = [
+      /\[Image Analysis:.*?\]/gs,
+      /\[Image Processing Error:.*?\]/gs,
+      /"json\s*\{.*?\}/gs,
+      /\{.*?"detailed_description".*?\}/gs,
+      /\[Image Analysis: ""json\s*\{.*?\}\]/gs,
+      /"detailed_description":\s*"[^"]*"/gs,
+      /"text_content_visible":\s*"[^"]*"/gs,
+      /"main_objects_and_elements":\s*\[[^\]]*\]/gs,
+      /"color_scheme":\s*\[[^\]]*\]/gs
+    ];
+    
+    let cleanedContent = content;
+    jsonPatterns.forEach(pattern => {
+      cleanedContent = cleanedContent.replace(pattern, '');
+    });
+    
+    // Clean up extra whitespace and newlines
+    cleanedContent = cleanedContent.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+    
+    // Remove any remaining JSON-like structures
+    cleanedContent = cleanedContent.replace(/\{[^}]*"detailed_description"[^}]*\}/g, '');
+    cleanedContent = cleanedContent.replace(/\[[^\]]*"detailed_description"[^\]]*\]/g, '');
+    
+    return cleanedContent;
+  };
+
+  // Clean messages when they are loaded
+  const cleanedMessages = messages.map(message => {
+    const originalContent = message.content;
+    const cleanedContent = cleanMessageContent(message.content);
+    
+    // Debug logging for content cleaning
+    if (originalContent !== cleanedContent) {
+      console.log('Cleaned message content:', {
+        messageId: message.id,
+        originalLength: originalContent.length,
+        cleanedLength: cleanedContent.length,
+        originalPreview: originalContent.substring(0, 200) + '...',
+        cleanedPreview: cleanedContent.substring(0, 200) + '...'
+      });
+    }
+    
+    return {
+      ...message,
+      content: cleanedContent
+    };
+  });
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [cleanedMessages]);
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim()) return;
+  const sendMessage = async (content: string, images?: File[]) => {
+    console.log('sendMessage called with:', { content, images: images?.length, user: !!user, uid: user?.uid, authLoading });
+    
+    if (!content.trim() && (!images || images.length === 0)) return;
 
-    // Create user message
+    // Check if authentication is still loading
+    if (authLoading) {
+      console.error('Authentication still loading');
+      throw new Error('Please wait for authentication to complete.');
+    }
+
+    // Check if user is authenticated
+    if (!user || !user.uid) {
+      console.error('User not authenticated', { user: !!user, uid: user?.uid });
+      throw new Error('User not authenticated. Please log in.');
+    }
+
+    console.log('User authenticated:', { uid: user.uid, email: user.email });
+
+    // Create user message with image attachments if present
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
       content,
       timestamp: new Date(),
       conversationId: conversationId || 'temp',
-      userId,
+      userId: user.uid,
+      messageType: images && images.length > 0 ? 'image-upload' : 'text',
     };
 
-    // Add user message to chat
+    // If images are present, create image attachments for immediate display
+    if (images && images.length > 0) {
+      const imageAttachments = images.map((image, index) => ({
+        id: generateId(),
+        url: URL.createObjectURL(image),
+        filename: image.name,
+        size: image.size,
+        mimeType: image.type,
+        width: 0, // Will be updated when image loads
+        height: 0, // Will be updated when image loads
+        uploadTimestamp: new Date(),
+      }));
+      userMessage.images = imageAttachments;
+    }
+
+    // Immediately add user message to chat for instant feedback
     const updatedMessages = [...messages, userMessage];
+    onMessagesUpdate(conversationId || '', updatedMessages, memoryInfo);
+    
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      let response;
+      
+      if (images && images.length > 0) {
+        // Handle image upload with FormData
+        const formData = new FormData();
+        formData.append('message', content);
+        formData.append('userId', user.uid);
+        if (conversationId) {
+          formData.append('conversationId', conversationId);
+        }
+        
+        // Add images to FormData
+        images.forEach((image) => {
+          formData.append(`images`, image);
+        });
+        
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        // Handle text-only message
+        const requestBody = {
           message: content,
-          userId,
+          userId: user.uid,
           conversationId,
-        }),
-      });
+        };
+        console.log('Sending JSON request:', requestBody);
+        
+        const jsonBody = JSON.stringify(requestBody);
+        console.log('JSON stringified body:', jsonBody);
+        console.log('Request URL:', '/api/chat');
+        console.log('Request method:', 'POST');
+        console.log('Request headers:', { 'Content-Type': 'application/json' });
+        
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: jsonBody,
+        });
+        
+        console.log('Response received:', {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+      }
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        let errorText = '';
+        let errorJson = null;
+        
+        try {
+          // Try to get the response as JSON first
+          errorJson = await response.json();
+          errorText = JSON.stringify(errorJson);
+        } catch (e) {
+          // If JSON parsing fails, try as text
+          try {
+            errorText = await response.text();
+          } catch (textError) {
+            errorText = 'Unable to read error response';
+          }
+        }
+        
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+          json: errorJson,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        const errorMessage = errorJson?.error || errorText || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(`Failed to send message: ${errorMessage}`);
       }
 
       const data = await response.json();
@@ -102,7 +267,7 @@ export function ChatArea({
       // Deserialize the AI message to ensure proper timestamp conversion
       const deserializedMessage = deserializeMessage(data.message) as unknown as Message;
       
-      // Add AI response to chat
+      // Add AI response to chat (user message is already displayed)
       const finalMessages = [...updatedMessages, deserializedMessage];
       
       // Update parent with new messages
@@ -117,14 +282,24 @@ export function ChatArea({
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      // Add error message
+      
+      // Create more informative error message
+      let errorContent = 'Sorry, I encountered an error. Please try again.';
+      
+      if (error instanceof Error) {
+        errorContent = `Error: ${error.message}`;
+      } else if (typeof error === 'string') {
+        errorContent = `Error: ${error}`;
+      }
+      
+      // Add error message (user message is already displayed)
       const errorMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: errorContent,
         timestamp: new Date(),
         conversationId: conversationId || 'temp',
-        userId,
+        userId: user?.uid || '',
       };
       const finalMessages = [...updatedMessages, errorMessage];
       onMessagesUpdate(conversationId || '', finalMessages, memoryInfo);
@@ -189,7 +364,7 @@ export function ChatArea({
               ))}
             </div>
           </div>
-        ) : messages.length === 0 ? (
+        ) : cleanedMessages.length === 0 ? (
           <EmptyState
             title="Welcome to the chat!"
             description="Start a conversation by typing a message below"
@@ -213,7 +388,7 @@ export function ChatArea({
               />
             )}
             
-            {messages.map((message) => (
+            {cleanedMessages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
             {isLoading && <TypingIndicator />}
@@ -223,7 +398,7 @@ export function ChatArea({
       </div>
 
       {/* Input Area */}
-      <ChatInput onSendMessage={sendMessage} disabled={isLoading} />
+      <EnhancedChatInput onSendMessage={sendMessage} disabled={isLoading} />
     </div>
   );
 } 
