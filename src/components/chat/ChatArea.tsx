@@ -59,7 +59,6 @@ export function ChatArea({
   
   // Get authenticated user
   const { user, logout, loading: authLoading } = useAuth();
-  const userId = user?.uid || '';
 
   // Debug authentication state
   console.log('Auth state:', { 
@@ -163,7 +162,7 @@ export function ChatArea({
 
     // If images are present, create image attachments for immediate display
     if (images && images.length > 0) {
-      const imageAttachments = images.map((image, index) => ({
+      const imageAttachments = images.map((image) => ({
         id: generateId(),
         url: URL.createObjectURL(image),
         filename: image.name,
@@ -196,7 +195,7 @@ export function ChatArea({
         
         // Add images to FormData
         images.forEach((image) => {
-          formData.append(`images`, image);
+          formData.append('images', image);
         });
         
         response = await fetch('/api/chat', {
@@ -242,11 +241,11 @@ export function ChatArea({
           // Try to get the response as JSON first
           errorJson = await response.json();
           errorText = JSON.stringify(errorJson);
-        } catch (e) {
+        } catch {
           // If JSON parsing fails, try as text
           try {
             errorText = await response.text();
-          } catch (textError) {
+          } catch {
             errorText = 'Unable to read error response';
           }
         }

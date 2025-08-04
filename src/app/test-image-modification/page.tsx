@@ -3,10 +3,18 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
+interface ImageModificationResult {
+  modifiedImage: {
+    url: string;
+  };
+  prompt: string;
+  originalImageName: string;
+}
+
 export default function TestImageModification() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [modificationPrompt, setModificationPrompt] = useState('Add mountains before the sunset');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ImageModificationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,12 +158,12 @@ export default function TestImageModification() {
         <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded">
           <h3 className="font-medium mb-2">💡 Modification Examples:</h3>
           <ul className="space-y-1 text-sm">
-            <li>• "Add mountains before the sunset"</li>
-            <li>• "Remove the person from the background"</li>
-            <li>• "Change the sky to blue"</li>
-            <li>• "Make the cat orange instead of black"</li>
-            <li>• "Add a hat to the person"</li>
-            <li>• "Replace the car with a bicycle"</li>
+            <li>• &ldquo;Add mountains before the sunset&rdquo;</li>
+            <li>• &ldquo;Remove the person from the background&rdquo;</li>
+            <li>• &ldquo;Change the sky to blue&rdquo;</li>
+            <li>• &ldquo;Make the cat orange instead of black&rdquo;</li>
+            <li>• &ldquo;Add a hat to the person&rdquo;</li>
+            <li>• &ldquo;Replace the car with a bicycle&rdquo;</li>
           </ul>
         </div>
       </div>

@@ -3,9 +3,19 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
+interface ImageGenerationResult {
+  generatedImage: {
+    url: string;
+  };
+  prompt: string;
+  size: string;
+  quality: string;
+  estimatedCost: number;
+}
+
 export default function TestImageGeneration() {
   const [prompt, setPrompt] = useState('a beautiful sunset over mountains');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ImageGenerationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +33,7 @@ export default function TestImageGeneration() {
         body: JSON.stringify({
           prompt,
           size: '1024x1024',
-          quality: 'standard',
+          quality: 'medium',
         }),
       });
 

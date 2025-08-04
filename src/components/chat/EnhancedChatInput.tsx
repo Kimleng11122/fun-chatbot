@@ -54,18 +54,18 @@ export function EnhancedChatInput({ onSendMessage, disabled = false }: EnhancedC
             <div>
               <p className="font-medium text-xs text-blue-700 mb-1">🎨 Generate Images:</p>
               <ul className="space-y-1 text-xs">
-                <li>• "Generate an image of a sunset over mountains"</li>
-                <li>• "Create a picture of a cute cat playing"</li>
-                <li>• "Make an image of a futuristic city"</li>
+                <li>• &ldquo;Generate an image of a sunset over mountains&rdquo;</li>
+                <li>• &ldquo;Create a picture of a cute cat playing&rdquo;</li>
+                <li>• &ldquo;Make an image of a futuristic city&rdquo;</li>
               </ul>
             </div>
             <div>
               <p className="font-medium text-xs text-blue-700 mb-1">✏️ Modify Images:</p>
               <ul className="space-y-1 text-xs">
-                <li>• "Add mountains before the sunset"</li>
-                <li>• "Remove the person from the background"</li>
-                <li>• "Change the sky to blue"</li>
-                <li>• "Make the cat orange instead of black"</li>
+                <li>• &ldquo;Add mountains before the sunset&rdquo;</li>
+                <li>• &ldquo;Remove the person from the background&rdquo;</li>
+                <li>• &ldquo;Change the sky to blue&rdquo;</li>
+                <li>• &ldquo;Make the cat orange instead of black&rdquo;</li>
               </ul>
             </div>
           </div>
